@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"time"
 
 	"charm.land/log/v2"
 	jrv1 "github.com/alphagov/govuk-job-request-operator/api/v1"
@@ -16,6 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 )
+
+const jobNameRetries = 4
 
 // wait for a JobRequest to enter an actionable state
 func awaitJobRequest(c *JobRequestClient, jobRequestName string) (*jrv1.JobRequest, error) {
@@ -29,6 +32,7 @@ func awaitJobRequest(c *JobRequestClient, jobRequestName string) (*jrv1.JobReque
 	defer w.Stop()
 	log.Debug("starting watch for JobRequest", "jobRequest", jobRequestName)
 	// Wait for JobRequest to transition to an actionable state
+	jobNameRetries := 1
 	for {
 		event := <-w.ResultChan()
 		log.Debug("got watch event for jobrequest", "event", event)
@@ -50,7 +54,8 @@ func awaitJobRequest(c *JobRequestClient, jobRequestName string) (*jrv1.JobReque
 		}
 		switch jr.Status.State {
 		case jrv1.JobRequestApproved, jrv1.JobRequestStarted, jrv1.JobRequestComplete, jrv1.JobRequestFailed:
-			log.Debug("job request state is actionable",
+			log.Debug(
+				"job request state is actionable",
 				"jr", jobRequestName,
 				"state", jr.Status.State,
 			)
@@ -58,7 +63,21 @@ func awaitJobRequest(c *JobRequestClient, jobRequestName string) (*jrv1.JobReque
 				log.Debug("breaking JobRequest loop", "jobName", jr.Status.JobName)
 				return jr, nil
 			} else {
-				return nil, fmt.Errorf("job request '%s' is in actionable state with no jobName", jobRequestName)
+				if jobNameRetries == 0 {
+					return nil, fmt.Errorf("job request '%s' is in actionable state with no jobName", jobRequestName)
+				} else {
+					// Job does not have a name yet: retry with an exponential
+					// backoff
+					retryDuration := 1 << jobNameRetries
+					log.Debug(
+						"job request '%s' does not have a name: retrying in %ds",
+						jobRequestName,
+						retryDuration,
+					)
+
+					time.Sleep(time.Duration(retryDuration) * time.Second)
+					jobNameRetries += 1
+				}
 			}
 		case jrv1.JobRequestRejected:
 			log.Debug("job request rejected", "jr", jobRequestName)

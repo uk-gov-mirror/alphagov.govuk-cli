@@ -235,6 +235,36 @@ func createJobRequest(ctx context.Context, jr *jrv1.JobRequest) error {
 	return err
 }
 
+// updateJobRequestStatus updates the status subresource of an existing
+// JobRequest in the test cluster.
+func updateJobRequestStatus(ctx context.Context, jr *jrv1.JobRequest) error {
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(jr)
+	if err != nil {
+		return err
+	}
+
+	i := dynamicClient.Resource(
+		jrv1.SchemeGroupVersion.WithResource("jobrequests"),
+	).Namespace(jr.Namespace)
+
+	// fetch
+	existing, err := i.Get(ctx, jr.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	// update status
+	status, hasStatus := obj["status"]
+	if !hasStatus {
+		return nil
+	}
+	existing.Object["status"] = status
+
+	// commit
+	_, err = i.UpdateStatus(ctx, existing, metav1.UpdateOptions{})
+	return err
+}
+
 // getJobRequest fetches a JobRequest by name from the test cluster, so tests
 // can assert on the fields the CLI actually persisted rather than just its
 // printed output.
