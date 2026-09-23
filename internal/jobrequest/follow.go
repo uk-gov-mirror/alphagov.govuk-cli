@@ -18,7 +18,9 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-const jobNameRetries = 4
+// How many times to retry if a job comes back without a name. Each retry is
+// delayed by n^2 seconds.
+const jobNameRetries = 3
 
 // wait for a JobRequest to enter an actionable state
 func awaitJobRequest(c *JobRequestClient, jobRequestName string) (*jrv1.JobRequest, error) {

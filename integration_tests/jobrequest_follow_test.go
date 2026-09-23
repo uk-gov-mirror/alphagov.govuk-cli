@@ -148,7 +148,7 @@ var _ = Describe("jobrequest get --follow", func() {
 			// )
 			// ---
 
-			// set a job name
+			// set a jobrequest name
 			err = SwitchToKubernetesAdminUser()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -179,6 +179,7 @@ var _ = Describe("jobrequest get --follow", func() {
 			}
 			Expect(createJob(ctx, job)).To(Succeed())
 
+			// and follow it
 			Eventually(session.Err, "10s").Should(gbytes.Say("job request state is actionable"))
 			Eventually(session.Err, "10s").Should(gbytes.Say("starting watch for Job"))
 		})
